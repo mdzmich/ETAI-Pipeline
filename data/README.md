@@ -1,5 +1,12 @@
 # Dataset -- COMPAS Recidivism (ProPublica)
+------------
+WEEK 2 --
 
+WHICH IS BETTER? 
+
+My answer is that Logistic regression achieves 67.8% test accuracy with stable performance training and test results are nearly identical, showing no overfitting. The second model reaches 82.9% training accuracy but only 63.1% test accuracy, revealing  overfitting with a 20% gap. I'll personally choose logistic regression it has better test accuracy and generalizes reliably to new data.
+
+------------
 ## The problem
 
 In 2016, ProPublica investigated COMPAS, a risk-assessment algorithm
