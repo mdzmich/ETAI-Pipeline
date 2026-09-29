@@ -7,14 +7,39 @@ data:
   sensitive_attr: "race"          # excluded from model features, used only to audit fairness
   drop_columns: ["id", "decile_score", "score_text"]  # identifiers / COMPAS's own score, not our model's inputs
 
+diagnostics:
+    placeholder_tokens: ["-", "?", "n/a", "N/A", "na", "NA", ""]
+    numeric_text_columns: ["priors_count", "prior_offenses"]
+    validity_rules:
+      age: {min: 18, max: 100}
+      decile_score: {min: 1, max: 10}
+      juv_fel_count: {min: 0}
+      juv_misd_count: {min: 0}
+      juv_other_count: {min: 0}
+      priors_count: {min: 0, max: 60}
+    canonical_categories:
+      sex: {male: "Male", female: "Female"}
+      race:
+        african-american: "African-American"
+        african american: "African-American"
+        caucasian: "Caucasian"
+        hispanic: "Hispanic"
+        asian: "Asian"
+        native american: "Native American"
+        other: "Other"
+      c_charge_degree: {f: "F", felony: "F", m: "M", misdemeanor: "M"}
+      score_text: {low: "Low", medium: "Medium", high: "High"}
+    id_column: "id"
+    redundant_columns: ["prior_offenses", "age_in_months", "juvenile_total"]
+
 split:
   test_size: 0.2
   random_state: 42
 
 model:
-  type: "decision_tree" #"logistic_regression"   "decision_tree"
-  params: {}
-    #max_iter: 1000
+  type: "decision_tree" #"logistic_regression"
+  params: {random_state: 42} #{max_iter: 1000}
+
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file

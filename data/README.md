@@ -1,10 +1,19 @@
 # Dataset -- COMPAS Recidivism (ProPublica)
 ------------
+
+Name: Michele De Zotti
+Student Number 20260570
+
+------------
 WEEK 2 --
 
 WHICH IS BETTER? 
 
-My answer is that Logistic regression achieves 67.8% test accuracy with stable performance training and test results are nearly identical, showing no overfitting. The second model reaches 82.9% training accuracy but only 63.1% test accuracy, revealing  overfitting with a 20% gap. I'll personally choose logistic regression it has better test accuracy and generalizes reliably to new data.
+My answer is that Logistic regression achieves 67.9% test accuracy with stable performance training and test results are nearly identical, showing no overfitting. The second model reaches 82.9% training accuracy but only 63.1% test accuracy, revealing  overfitting with a 20% gap. I'll personally choose logistic regression it has better test accuracy and generalizes reliably to new data.
+
+WEEK 3 --
+
+The cleaning process removed duplicate records and unnecessary columns, made category labels consistent, and treated invalid entries as missing. Test accuracy was lower for both models: the decision tree fell from 63.1% to 60.4%, while logistic regression went from 67.9% to 65.5%. Even after cleaning, logistic regression performed more consistently, with 67.8% training accuracy and 65.5% test accuracy, compared with 79.9% and 60.4% for the decision tree. Since cleaning changed which records ended up in the test set, these results are not a direct comparison, and the lower scores alone do not prove that cleaning harmed either model.
 
 ------------
 ## The problem
