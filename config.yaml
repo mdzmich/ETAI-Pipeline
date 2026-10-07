@@ -55,7 +55,7 @@ cv:
   n_splits: 5
   shuffle: true
   random_state: 42
-  scoring: "accuracy"
+  scoring: "balanced_accuracy"
   n_jobs: 1
 
 model_comparison:
@@ -68,6 +68,26 @@ model:
   type: "decision_tree" # "logistic_regression"
   params: {random_state: 42} #{max_iter: 1000}
 
+tuning:
+  enabled: true
+  n_trials: 30
+  n_trials_by_model:
+    random_forest: 15
+  n_splits: 5
+  random_state: 42
+  search_spaces:
+    decision_tree:
+      model__max_depth: {type: int, low: 1, high: 20}
+      model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
+      model__criterion: {type: categorical, choices: ["gini", "entropy"]}
+      prep__numeric__impute__strategy: {type: categorical, choices: ["median", "mean"]}
+    logistic_regression:
+      model__C: {type: float, low: 0.0001, high: 100, log: true}
+    random_forest:
+      model__n_estimators: {type: int, low: 30, high: 100}
+      model__max_depth: {type: categorical, choices: [null, 5, 10, 20]}
+      model__min_samples_leaf: {type: int, low: 1, high: 100, log: true}
+      model__max_features: {type: categorical, choices: ["sqrt", "log2", 0.5, 1.0]}
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file

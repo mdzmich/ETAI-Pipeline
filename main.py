@@ -12,17 +12,15 @@ import yaml
 import pandas as pd
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.pipeline import Pipeline
 
 from src.data import load_data
 from src.preprocessing import (
-    build_preprocessor,
     clean_dataset,
     drop_duplicate_rows,
     split_dev_test,
     split_features_target,
 )
-from src.model import build_model
+from src.model import build_pipeline
 from src.evaluate import (
     cross_validate_pipeline,
     cv_report,
@@ -31,19 +29,12 @@ from src.evaluate import (
     oof_classification_report,
 )
 from src.results import save_run
+from src.tuning import nested_cross_validate, tune_pipeline, tuning_report
 
 
 def load_config(path: str = "config.yaml") -> dict:
     with open(path, "r") as f:
         return yaml.safe_load(f)
-
-
-def make_pipeline(model_config: dict, preprocessing_config: dict) -> Pipeline:
-    """Combine preprocessing and model so both are fitted inside every split."""
-    return Pipeline([
-        ("prep", build_preprocessor(preprocessing_config)),
-        ("model", build_model(model_config)),
-    ])
 
 
 def main():
@@ -91,12 +82,12 @@ def main():
     scoring = cv_config.get("scoring", "accuracy")
 
     for model_name, model_config in model_configs.items():
-        holdout_model = make_pipeline(model_config, config["preprocessing"])
+        holdout_model = build_pipeline(config["preprocessing"], model_config)
         holdout_model.fit(X_train, y_train)
         train_predictions = holdout_model.predict(X_train)
         validation_predictions = holdout_model.predict(X_validation)
         fold_scores, y_oof = cross_validate_pipeline(
-            make_pipeline(model_config, config["preprocessing"]),
+            build_pipeline(config["preprocessing"], model_config),
             X_dev,
             y_dev,
             cv,
@@ -124,6 +115,62 @@ def main():
     print(comparison_text)
 
     report = "Model comparison (same holdout split and CV folds):\n\n" + comparison_text
+
+    selected_model = config["model"]["type"]
+    selected_pipeline = build_pipeline(config["preprocessing"], config["model"])
+    tuning_config = config.get("tuning", {})
+    tuning_text = ""
+    if tuning_config.get("enabled", False):
+        search_spaces = tuning_config.get("search_spaces") or {}
+        if selected_model not in search_spaces:
+            raise ValueError(
+                f"Tuning is enabled, but no search space is configured for {selected_model!r}. "
+                f"Available model types: {list(search_spaces)}"
+            )
+
+        search_space = search_spaces[selected_model]
+        n_trials = tuning_config.get("n_trials_by_model", {}).get(
+            selected_model, tuning_config["n_trials"]
+        )
+        tuning_seed = tuning_config["random_state"]
+        inner_cv = StratifiedKFold(
+            n_splits=tuning_config["n_splits"],
+            shuffle=True,
+            random_state=tuning_seed,
+        )
+        n_jobs = cv_config.get("n_jobs", 1)
+        nested_scores, y_oof = nested_cross_validate(
+            selected_pipeline,
+            X_dev,
+            y_dev,
+            cv,
+            inner_cv,
+            scoring,
+            search_space,
+            n_trials,
+            tuning_seed,
+            n_jobs=n_jobs,
+        )
+        model_results[selected_model]["fold_scores"] = nested_scores
+        model_results[selected_model]["y_oof"] = y_oof
+        print("\nNested cross-validation for the selected model:")
+        tuning_cv_text = cv_report(nested_scores, scoring)
+
+        selected_pipeline, study = tune_pipeline(
+            selected_pipeline,
+            X_dev,
+            y_dev,
+            inner_cv,
+            scoring,
+            search_space,
+            n_trials,
+            tuning_seed,
+            n_jobs=n_jobs,
+        )
+        tuning_text = tuning_report(study, nested_scores, scoring)
+        report += "\n\nNested cross-validation for the selected model\n" + tuning_cv_text
+        report += "\n\n" + tuning_text
+
     for model_name, results in model_results.items():
         print(f"\nDetailed reports: {model_name}")
         report += f"\n\n\n{model_name} - without cross-validation\n"
@@ -143,7 +190,7 @@ def main():
             sensitive_attr=config["data"]["sensitive_attr"],
         )
 
-    final_model = make_pipeline(config["model"], config["preprocessing"]).fit(X_dev, y_dev)
+    final_model = selected_pipeline.fit(X_dev, y_dev)
     print(f"Final model: {config['model']['type']} refit on all {len(X_dev)} development rows.")
     print(f"Locked test set reserved: {len(X_test)} rows.")
 

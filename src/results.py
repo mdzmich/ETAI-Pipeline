@@ -27,6 +27,8 @@ def save_run(results_dir: str, config: dict, report_text: str) -> str:
         f"random_state: {config['holdout']['random_state']}\n"
         f"CV: {config['cv']['n_splits']} folds, scoring={config['cv'].get('scoring', 'accuracy')}, "
         f"random_state={config['cv'].get('random_state')}\n"
+        f"Tuning: {config.get('tuning', {}).get('enabled', False)}"
+        + (f"  settings={config['tuning']}\n" if config.get("tuning", {}).get("enabled", False) else "\n")
         + "=" * 60 + "\n\n"
     )
 
