@@ -96,6 +96,25 @@ def add_missingness_indicators(df: pd.DataFrame, mnar_indicator_sources: list) -
     return out
 
 
+def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Create fixed, leak-safe features that can be computed before the split."""
+    out = df.copy()
+    if {"age", "priors_count"}.issubset(out.columns):
+        adult_years = (out["age"] - 17).clip(lower=1)
+        out["priors_per_adult_year"] = out["priors_count"] / adult_years
+
+    if {"age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count"}.issubset(out.columns):
+        total_offenses = (
+            out["juv_fel_count"]
+            + out["juv_misd_count"]
+            + out["juv_other_count"]
+            + out["priors_count"]
+        )
+        out["offenses_per_adult_year"] = total_offenses / adult_years
+
+    return out
+
+
 def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_sources: list):
     """Return model features, optional target, and metadata reserved for auditing."""
     target = data_config["target"]

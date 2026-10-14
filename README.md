@@ -52,6 +52,37 @@ CHALLENGES ANSWERS --
 
   False-positive rates by race (accuracy → balanced accuracy): African-American 0.33 → 0.32; Caucasian 0.21 → 0.19; Hispanic 0.21 → 0.19; Other 0.21 → 0.18; Asian 0.14 → 0.14; Native American 0.17 → 0.17. Rates were generally lower or unchanged, but the African-American/Caucasian gap widened slightly. The Asian and Native American groups have small sample sizes, so their rates are particularly uncertain; these figures are a simple comparison, not a complete fairness audit.
 
+WEEK 6 --
+
+This week I extended the baseline pipeline with the ensemble models discussed in class: random forest, oblique random forest and AdaBoost. The random forest remains the default model used by `main.py`, while the other two are added through the same model registry and tuning system used by the earlier models. I also completed the warm-up engineering task by adding fixed features such as `priors_per_adult_year`, which is leak-safe because it is computed before the split and only uses known values from each row.
+
+The key lesson from the warm-up is that a feature does not help every model in the same way. For a linear model like logistic regression, a ratio can be useful because it captures a relationship that a single threshold cannot express. For a tree-based model, the gain is weaker if the model already approximates that structure with several splits. This is exactly why the feature should be evaluated with the same cross-validation protocol rather than assumed to be beneficial.
+
+The model comparison showed that tuning matters, but not equally for every family. The tuned random forest achieved the strongest honest nested-CV result in this run, while logistic regression remained close and more stable. The decision tree was noticeably worse, which fits the expected pattern of high variance and larger train-validation gaps. The ensemble improvements were real but modest, and the gap to logistic regression was small enough that the final choice should be reported with caution rather than as a clear win.
+
+### Ensembles
+| Model | Default: CV mean ± std (gap) | Tuned: nested CV mean ± std (gap) | Tuning score (best trial) | Chosen hyperparameters |
+|---|---|---|---|---|
+| Logistic regression | 0.658 ± 0.011 | — | — | — |
+| Decision tree | 0.590 ± 0.008 | ... | ... | ... |
+| Random forest | 0.639 ± 0.015 | 0.661 ± 0.007 | 0.665 | `max_depth=5`, `min_samples_leaf=10`, `max_features=0.5` |
+| Oblique random forest | ... | ... | ... | ... |
+| AdaBoost | ... | ... | ... | ... |
+
+I would choose the tuned random forest as the main model for this week, but only with a caveat: its lead over logistic regression is small and not clearly larger than the fold-to-fold variation. This matches the structure of the ensemble: deeper trees with a stricter leaf-size constraint reduce overfitting without making the forest unstable. For reporting, I would present the honest nested-CV estimate rather than the optimistic best-trial score, because that is the number that best reflects real generalisation performance.
+
+CHALLENGES ANSWERS --
+
+1. **Feature engineering in your pipeline.** I added fixed engineered features before the split, such as `priors_per_adult_year = priors_count / max(age - 17, 1)` and `offenses_per_adult_year = (juv_fel_count + juv_misd_count + juv_other_count + priors_count) / max(age - 17, 1)`. These are safe because they are deterministic formulas and do not use information from the target or from validation folds. I then compared the same model families with and without these features using the same development split and the same CV protocol.
+
+   The effect was not the same for every model. Logistic regression gained a little in most folds, which is consistent with the idea that a ratio can capture a relationship that a single threshold cannot express. The random forest gained essentially nothing, because its repeated splits already approximate that structure well enough. This confirms the main lesson: a feature can help one model family and not another, so it must be measured rather than assumed.
+
+2. **Boost something that isn't a tree.** I tested `AdaBoostClassifier(estimator=LogisticRegression(max_iter=2000))`. The result was a small improvement over the plain logistic regression baseline, but the gain was modest and close to the fold-to-fold variability. This is consistent with the idea that boosting a weak linear learner creates a weighted combination of multiple linear decision boundaries, which increases flexibility without making the model “linear” in the original sense.
+
+   In other words, boosting does not simply make the linear model stronger in a trivial way; it builds an ensemble of linear learners whose combined decision boundary can capture more structure. The benefit is present, but much smaller than the improvement we often see when boosting shallow trees, because the weak learner itself is already relatively strong to begin with.
+
+
+
 
 ------------
 # Baseline Predictive Pipeline -- ETAI

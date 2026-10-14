@@ -15,6 +15,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from src.data import load_data
 from src.preprocessing import (
+    add_engineered_features,
     clean_dataset,
     drop_duplicate_rows,
     split_dev_test,
@@ -45,6 +46,7 @@ def main():
     df_clean = drop_duplicate_rows(
         df_clean, config["diagnostics"].get("id_column")
     )
+    df_clean = add_engineered_features(df_clean)
     X, y, extras = split_features_target(
         df_clean,
         config["data"],
