@@ -125,6 +125,25 @@ This table is updated after each practical class, so you can always see what cha
 |------|------------------------|------------------------|
 | 2 | Introduction & baseline pipeline | Initial version: project structure, a single naive train/test split (no cross-validation), minimal preprocessing (drop rows with missing values, one-hot encode categoricals), logistic regression baseline, a first (deliberately simple) fairness check comparing our model's and COMPAS's own false-positive rate by race, train-vs-test accuracy reporting (to start spotting overfitting), and each run's full report saved automatically to `results/` |
 | 5 | Hyperparameter tuning | Optuna tunes the selected model on development data using CV of the full pipeline; nested CV estimates the tuning procedure honestly; the locked test set remains untouched |
+| 7 | Boosting & evaluation metrics | Added Gaussian Naive Bayes, gradient boosting and histogram gradient boosting; eight CV metrics with ROC-AUC as the selection metric; out-of-fold probabilities, confusion matrix and group fairness reports; nested tuning, a corrected paired t-test for optional feature selection, and a per-run scoreboard in `results/runs.csv`. |
+
+**W7 selection metric:** ROC-AUC is the selection metric because it measures how well the model ranks positive cases across thresholds, without tying model selection to one classification cutoff. Accuracy, balanced accuracy, precision, recall, F1, F-beta (beta=2) and average precision are reported alongside it to make the trade-offs visible.
+
+**W7 scoreboard:** development-set scores on the same stratified 5-fold split; tuned scores use nested CV with five Optuna trials per model. The dummy is the no-model floor, and the locked test set was not used.
+
+| Model | Tuned | ROC-AUC (mean ± std) | Untuned ROC-AUC | Dummy floor |
+|-------|-------|----------------------|-----------------|-------------|
+| AdaBoost | Yes | 0.727 ± 0.013 | 0.721 | 0.500 |
+| Oblique random forest | Yes | 0.727 ± 0.011 | 0.680 | 0.500 |
+| Gradient boosting | Yes | 0.725 ± 0.012 | 0.725 | 0.500 |
+| Random forest | Yes | 0.725 ± 0.014 | 0.684 | 0.500 |
+| HistGradientBoosting | Yes | 0.723 ± 0.014 | 0.713 | 0.500 |
+| Logistic regression | Yes | 0.722 ± 0.012 | 0.723 | 0.500 |
+| Decision tree | Yes | 0.715 ± 0.010 | 0.595 | 0.500 |
+| Naive Bayes | Yes | 0.700 ± 0.011 | 0.700 | 0.500 |
+| Dummy | No | 0.500 ± 0.000 | 0.500 | 0.500 |
+
+`results/runs.csv` stores the per-fold values and run settings behind this table. It is regenerated/appended by `python main.py` for each selected model run.
 
 ## Environment setup
 

@@ -1,11 +1,19 @@
 """Model construction."""
-from sklearn.ensemble import AdaBoostClassifier, BaggingClassifier, RandomForestClassifier
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    BaggingClassifier,
+    GradientBoostingClassifier,
+    HistGradientBoostingClassifier,
+    RandomForestClassifier,
+)
+from sklearn.naive_bayes import GaussianNB
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.random_projection import SparseRandomProjection
 from sklearn.tree import DecisionTreeClassifier
 
+from src.feature_selection import VoteSelector
 from src.preprocessing import build_preprocessor
 
 
@@ -55,6 +63,9 @@ _MODELS = {
     "oblique_random_forest": oblique_random_forest,
     "adaboost": adaboost,
     "adaboost_logistic_regression": adaboost_logistic_regression,
+    "gradient_boosting": GradientBoostingClassifier,
+    "hist_gradient_boosting": HistGradientBoostingClassifier,
+    "naive_bayes": GaussianNB,
 }
 
 
@@ -68,9 +79,20 @@ def build_model(model_config: dict):
     return _MODELS[model_type](**params)
 
 
-def build_pipeline(preprocessing_config: dict, model_config: dict) -> Pipeline:
+def build_pipeline(
+    preprocessing_config: dict,
+    model_config: dict,
+    feature_selection_config: dict | None = None,
+) -> Pipeline:
     """Combine preprocessing and model so every learned step is fitted within each fold."""
-    return Pipeline([
-        ("prep", build_preprocessor(preprocessing_config)),
-        ("model", build_model(model_config)),
-    ])
+    steps = [("prep", build_preprocessor(preprocessing_config))]
+    if feature_selection_config and feature_selection_config.get("enabled", False):
+        steps.append((
+            "select",
+            VoteSelector(
+                min_votes=feature_selection_config.get("min_votes", 2),
+                random_state=feature_selection_config.get("random_state"),
+            ),
+        ))
+    steps.append(("model", build_model(model_config)))
+    return Pipeline(steps)

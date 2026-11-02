@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import optuna
 from sklearn.base import clone
-from sklearn.metrics import get_scorer
 from sklearn.model_selection import cross_val_score
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -14,7 +13,7 @@ def tune_pipeline(
     X,
     y,
     cv,
-    scoring: str,
+    scorer,
     search_space: dict,
     n_trials: int,
     random_state: int,
@@ -42,7 +41,13 @@ def tune_pipeline(
 
         candidate = clone(pipeline).set_params(**params)
         scores = cross_val_score(
-            candidate, X, y, cv=cv, scoring=scoring, n_jobs=n_jobs
+            candidate,
+            X,
+            y,
+            cv=cv,
+            scoring=scorer,
+            n_jobs=n_jobs,
+            error_score="raise",
         )
         trial.set_user_attr("std", float(scores.std(ddof=1)))
         return scores.mean()
@@ -62,28 +67,34 @@ def nested_cross_validate(
     y,
     outer_cv,
     inner_cv,
-    scoring: str,
+    scorers: dict,
+    selection_metric: str,
     search_space: dict,
     n_trials: int,
     random_state: int,
     n_jobs: int = 1,
 ):
     """Estimate tuning performance using outer folds untouched by the inner search."""
-    scorer = get_scorer(scoring)
+    if selection_metric not in scorers:
+        raise ValueError(
+            f"Selection metric {selection_metric!r} is not in the configured scorers"
+        )
     rows = []
-    y_oof = np.empty(len(X), dtype=np.asarray(y).dtype)
+    y_oof_proba = np.empty(len(X), dtype=float)
 
     for fold, (train_indices, validation_indices) in enumerate(
         outer_cv.split(X, y), start=1
     ):
-        X_train, y_train = X.iloc[train_indices], y.iloc[train_indices]
-        X_validation, y_validation = X.iloc[validation_indices], y.iloc[validation_indices]
+        X_train = X.iloc[train_indices] if hasattr(X, "iloc") else X[train_indices]
+        y_train = y.iloc[train_indices] if hasattr(y, "iloc") else y[train_indices]
+        X_validation = X.iloc[validation_indices] if hasattr(X, "iloc") else X[validation_indices]
+        y_validation = y.iloc[validation_indices] if hasattr(y, "iloc") else y[validation_indices]
         best_pipeline, study = tune_pipeline(
             pipeline,
             X_train,
             y_train,
             inner_cv,
-            scoring,
+            scorers[selection_metric],
             search_space,
             n_trials,
             random_state,
@@ -91,38 +102,54 @@ def nested_cross_validate(
         )
         best_pipeline.fit(X_train, y_train)
 
-        train_score = scorer(best_pipeline, X_train, y_train)
-        validation_score = scorer(best_pipeline, X_validation, y_validation)
-        y_oof[validation_indices] = best_pipeline.predict(X_validation)
+        train_score = scorers[selection_metric](best_pipeline, X_train, y_train)
+        validation_scores = {
+            name: scorer(best_pipeline, X_validation, y_validation)
+            for name, scorer in scorers.items()
+        }
+        classes = np.asarray(best_pipeline.classes_)
+        positive = np.flatnonzero(classes == 1)
+        if len(positive) != 1:
+            raise ValueError(
+                f"Expected a binary estimator with positive class 1; got {classes!r}"
+            )
+        y_oof_proba[validation_indices] = best_pipeline.predict_proba(
+            X_validation
+        )[:, positive[0]]
         rows.append({
             "fold": fold,
             "train": train_score,
-            "validation": validation_score,
-            "gap": train_score - validation_score,
+            "validation": validation_scores[selection_metric],
+            "gap": train_score - validation_scores[selection_metric],
             "inner_best": study.best_value,
+            **validation_scores,
             **study.best_params,
         })
 
-    return pd.DataFrame(rows), y_oof
+    return pd.DataFrame(rows), y_oof_proba
 
 
 def tuning_report(
-    study, nested_scores: pd.DataFrame, scoring: str = "accuracy", top: int = 5
+    study,
+    nested_scores: pd.DataFrame,
+    selection_metric: str,
+    top: int = 5,
 ) -> str:
-    """Format the final search and compare inner scores with the honest outer scores."""
+    """Report the final search and compare inner and honest outer scores."""
     trials = study.trials_dataframe(attrs=("number", "value", "params", "user_attrs"))
     trials = trials.rename(
         columns=lambda column: column.replace("params_", "").replace("user_attrs_", "")
-    ).rename(columns={"number": "trial", "value": f"mean {scoring}"})
+    ).rename(columns={"number": "trial", "value": f"mean {selection_metric}"})
     inner = nested_scores["inner_best"].mean()
     outer = nested_scores["validation"].mean()
     lines = [
-        f"Tuning on the whole development set ({len(study.trials)} Optuna trials, metric: {scoring})",
+        f"Tuning on the whole development set "
+        f"({len(study.trials)} Optuna trials, metric: {selection_metric})",
         f"Best hyperparameters: {study.best_params}",
         f"Best mean CV score:   {study.best_value:.3f}  (maximum over trials; optimistic)",
         "",
         f"Top {top} trials:",
-        trials.sort_values(f"mean {scoring}", ascending=False)
+        trials.sort_values(f"mean {selection_metric}", ascending=False)
         .head(top)
         .to_string(index=False, float_format=lambda value: f"{value:.3f}"),
         "",
