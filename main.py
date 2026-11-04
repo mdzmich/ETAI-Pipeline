@@ -8,6 +8,8 @@ This orchestrates the full (deliberately simple) pipeline:
     load config -> load data -> clean -> split -> cross-validate pipeline
     -> refit on development data -> save results
 """
+import atexit
+import tempfile
 from datetime import datetime
 
 import yaml
@@ -45,6 +47,9 @@ def load_config(path: str = "config.yaml") -> dict:
 def main():
     config = load_config()
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    cache = tempfile.TemporaryDirectory(prefix="pipeline_cache_")
+    atexit.register(cache.cleanup)
+    cache_dir = cache.name
 
     df = load_data(config["data"]["path"])
     df_clean = clean_dataset(df, config["diagnostics"])
@@ -102,14 +107,20 @@ def main():
             else None
         )
         holdout_model = build_pipeline(
-            config["preprocessing"], model_config, model_feature_config
+            config["preprocessing"],
+            model_config,
+            model_feature_config,
+            memory=cache_dir,
         )
         holdout_model.fit(X_train, y_train)
         train_predictions = holdout_model.predict(X_train)
         validation_predictions = holdout_model.predict(X_validation)
         fold_scores, y_oof = cross_validate_pipeline(
             build_pipeline(
-                config["preprocessing"], model_config, model_feature_config
+                config["preprocessing"],
+                model_config,
+                model_feature_config,
+                memory=cache_dir,
             ),
             X_dev,
             y_dev,
@@ -144,12 +155,17 @@ def main():
         config["preprocessing"],
         config["model"],
         config.get("feature_selection"),
+        memory=cache_dir,
     )
     selected_results = model_results[selected_model_name]
     untuned_scores = selected_results["fold_scores"]
     oof_proba = selected_results["oof_proba"]
     floor_scores, _ = cross_validate_pipeline(
-        build_pipeline(config["preprocessing"], {"type": "dummy", "params": {}}),
+        build_pipeline(
+            config["preprocessing"],
+            {"type": "dummy", "params": {}},
+            memory=cache_dir,
+        ),
         X_dev,
         y_dev,
         cv,
@@ -178,11 +194,11 @@ def main():
 
         search_space = dict(search_spaces[selected_model_name])
         feature_config = config.get("feature_selection", {})
-        if feature_config.get("enabled", False):
-            search_space["select__min_votes"] = {
-                "type": "categorical",
-                "choices": feature_config.get("min_votes_candidates", [1, 2, 3]),
-            }
+        if (
+            feature_config.get("enabled", False)
+            and feature_config.get("method", "vote") == "vote"
+        ):
+            search_space.update(feature_config.get("search_space", {}))
         n_trials = tuning_config.get("n_trials_by_model", {}).get(
             selected_model_name, tuning_config["n_trials"]
         )
@@ -234,6 +250,7 @@ def main():
             config["preprocessing"],
             config["model"],
             {**feature_config, "enabled": False},
+            memory=cache_dir,
         )
         if tuning_config.get("enabled", False):
             baseline_search_space = {
@@ -305,6 +322,12 @@ def main():
     final_model = selected_pipeline.fit(X_dev, y_dev)
     print(f"Final model: {config['model']['type']} refit on all {len(X_dev)} development rows.")
     print(f"Locked test set reserved: {len(X_test)} rows.")
+    features_kept = final_model.named_steps["prep"].get_feature_names_out()
+    if "select" in final_model.named_steps:
+        features_kept = features_kept[
+            final_model.named_steps["select"].get_support()
+        ]
+    print(f"Features kept: {', '.join(map(str, features_kept))}")
 
     scoreboard_row = {
         "run": run_id,
@@ -313,6 +336,10 @@ def main():
         "tuned": bool(tuning_config.get("enabled", False)),
         "encoder": config["preprocessing"]["encoder"],
         "scaler": config["preprocessing"]["scaler"],
+        "feature_selection": str(
+            feature_config if feature_config.get("enabled", False)
+            else {"enabled": False}
+        ),
         "params": str(config["model"].get("params", {})),
         "tuned_params": str(study.best_params) if study is not None else "",
         "metric": selection_metric,
@@ -344,6 +371,7 @@ def main():
     results_dir = output_config.get("results_dir", "results")
     path = save_run(results_dir, config, report, run_id=run_id)
     print(f"Full results saved to {path}")
+    cache.cleanup()
 
 
 if __name__ == "__main__":

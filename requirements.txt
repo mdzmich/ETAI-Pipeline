@@ -5,3 +5,4 @@ scipy>=1.11
 PyYAML>=6.0
 category-encoders>=2.6
 optuna>=4.0
+xgboost>=2.0

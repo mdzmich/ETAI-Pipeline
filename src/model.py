@@ -8,10 +8,12 @@ from sklearn.ensemble import (
 )
 from sklearn.naive_bayes import GaussianNB
 from sklearn.dummy import DummyClassifier
+from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.random_projection import SparseRandomProjection
 from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
 
 from src.feature_selection import VoteSelector
 from src.preprocessing import build_preprocessor
@@ -66,6 +68,7 @@ _MODELS = {
     "gradient_boosting": GradientBoostingClassifier,
     "hist_gradient_boosting": HistGradientBoostingClassifier,
     "naive_bayes": GaussianNB,
+    "xgboost": XGBClassifier,
 }
 
 
@@ -83,16 +86,40 @@ def build_pipeline(
     preprocessing_config: dict,
     model_config: dict,
     feature_selection_config: dict | None = None,
+    memory=None,
 ) -> Pipeline:
     """Combine preprocessing and model so every learned step is fitted within each fold."""
     steps = [("prep", build_preprocessor(preprocessing_config))]
     if feature_selection_config and feature_selection_config.get("enabled", False):
-        steps.append((
-            "select",
-            VoteSelector(
+        method = feature_selection_config.get("method", "vote")
+        if method == "vote":
+            selector = VoteSelector(
                 min_votes=feature_selection_config.get("min_votes", 2),
                 random_state=feature_selection_config.get("random_state"),
-            ),
+            )
+        elif method == "kbest":
+            selector = SelectKBest(
+                score_func=f_classif,
+                k=feature_selection_config.get("k", 4),
+            )
+        elif method == "from_model":
+            selector = SelectFromModel(
+                RandomForestClassifier(
+                    n_estimators=200,
+                    min_samples_leaf=20,
+                    random_state=feature_selection_config.get("random_state"),
+                    n_jobs=-1,
+                ),
+                threshold=feature_selection_config.get("threshold", "mean"),
+            )
+        else:
+            raise ValueError(
+                f"Unknown feature-selection method: {method}. "
+                "Options: ['vote', 'kbest', 'from_model']"
+            )
+        steps.append((
+            "select",
+            selector,
         ))
     steps.append(("model", build_model(model_config)))
-    return Pipeline(steps)
+    return Pipeline(steps, memory=memory)

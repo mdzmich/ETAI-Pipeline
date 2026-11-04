@@ -42,10 +42,12 @@ def save_run(
     cv_config = config.get("cv", {})
     tuning_config = config.get("tuning", {})
     holdout_config = config.get("holdout", {})
+    feature_selection_config = config.get("feature_selection", {})
 
     header = (
         f"Run: {timestamp}\n"
         f"Model: {config['model']['type']}  params={config['model'].get('params', {})}\n"
+        f"Feature selection: {feature_selection_config if feature_selection_config.get('enabled', False) else {'enabled': False}}\n"
         f"Locked test size: {config['test_set']['size']}  "
         f"random_state: {config['test_set']['random_state']}\n"
         + (

@@ -60,6 +60,7 @@ The key lesson from the warm-up is that a feature does not help every model in t
 
 The model comparison showed that tuning matters, but not equally for every family. The tuned random forest achieved the strongest honest nested-CV result in this run, while logistic regression remained close and more stable. The decision tree was noticeably worse, which fits the expected pattern of high variance and larger train-validation gaps. The ensemble improvements were real but modest, and the gap to logistic regression was small enough that the final choice should be reported with caution rather than as a clear win.
 
+
 ### Ensembles
 | Model | Default: CV mean ± std (gap) | Tuned: nested CV mean ± std (gap) | Tuning score (best trial) | Chosen hyperparameters |
 |---|---|---|---|---|
@@ -80,6 +81,43 @@ CHALLENGES ANSWERS --
 2. **Boost something that isn't a tree.** I tested `AdaBoostClassifier(estimator=LogisticRegression(max_iter=2000))`. The result was a small improvement over the plain logistic regression baseline, but the gain was modest and close to the fold-to-fold variability. This is consistent with the idea that boosting a weak linear learner creates a weighted combination of multiple linear decision boundaries, which increases flexibility without making the model “linear” in the original sense.
 
    In other words, boosting does not simply make the linear model stronger in a trivial way; it builds an ensemble of linear learners whose combined decision boundary can capture more structure. The benefit is present, but much smaller than the improvement we often see when boosting shallow trees, because the weak learner itself is already relatively strong to begin with.
+
+
+WEEK 7 --
+
+ROC-AUC is the selection metric because it measures how well the model ranks positive cases across thresholds, without tying model selection to one classification cutoff. Accuracy, balanced accuracy, precision, recall, F1, F-beta (beta=2) and average precision are reported alongside it to make the trade-offs visible.
+
+Development-set scores on the same stratified 5-fold split; tuned scores use nested CV with five Optuna trials per model. The dummy is the no-model floor, and the locked test set was not used.
+
+| Model | Tuned | ROC-AUC (mean ± std) | Untuned ROC-AUC | Dummy floor |
+|-------|-------|----------------------|-----------------|-------------|
+| AdaBoost | Yes | 0.727 ± 0.013 | 0.721 | 0.500 |
+| Oblique random forest | Yes | 0.727 ± 0.011 | 0.680 | 0.500 |
+| Gradient boosting | Yes | 0.725 ± 0.012 | 0.725 | 0.500 |
+| Random forest | Yes | 0.725 ± 0.014 | 0.684 | 0.500 |
+| HistGradientBoosting | Yes | 0.723 ± 0.014 | 0.713 | 0.500 |
+| Logistic regression | Yes | 0.722 ± 0.012 | 0.723 | 0.500 |
+| Decision tree | Yes | 0.715 ± 0.010 | 0.595 | 0.500 |
+| Naive Bayes | Yes | 0.700 ± 0.011 | 0.700 | 0.500 |
+| Dummy | No | 0.500 ± 0.000 | 0.500 | 0.500 |
+
+`results/runs.csv` stores the per-fold values and run settings behind this table. It is regenerated/appended by `python main.py` for each selected model run.
+
+WEEK 8 --
+
+With five Optuna trials and identical seeded nested 5-fold CV, tuned XGBoost scored ROC-AUC **0.724 ± 0.012** with selection and **0.726 ± 0.014** without it. The corrected paired t-test found a mean difference of **−0.00146** (selection minus no selection), **t = −0.568**, **p = 0.600**; selection won 2 of 5 folds, so this run provides no evidence of a meaningful performance difference. Tuning chose `min_votes=1` and retained 4 of 12 transformed features: age, priors count, priors per adult year, and offenses per adult year. I would keep selection enabled here because it gives a substantially smaller model with no measurable ROC-AUC penalty in this experiment, while recognizing that this is a single seeded comparison.
+
+**W8 optional selector challenges:** The configuration now supports `feature_selection.method: vote | kbest | from_model`. Compared on the same five folds with the same tuned XGBoost parameters, all three selected the same four features and produced identical ROC-AUC (**0.724 ± 0.012**); corrected paired tests were **p = 1.000**. In one end-to-end timing run, `kbest` took **1.59 s**, `from_model` **5.49 s**, and `vote` **7.34 s**, making `kbest` fastest for the same score on this dataset (timings are environment-dependent). For B2, nested tuning selected `min_votes` **3, 2, 3, 3, 2** in the five outer folds, but selected **1** when tuned on all development data; the fold-to-fold variation shows the best threshold is not stable on every training subset.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -108,6 +146,7 @@ go on.
 │   ├── data.py             # loading
 │   ├── preprocessing.py    # cleaning + train/test split
 │   ├── model.py             # model construction
+│   ├── feature_selection.py # leak-safe voting feature selector
 │   ├── tuning.py            # Optuna search + nested cross-validation
 │   ├── evaluate.py         # accuracy metrics + fairness check
 │   └── results.py          # saves each run's report to disk
@@ -126,24 +165,8 @@ This table is updated after each practical class, so you can always see what cha
 | 2 | Introduction & baseline pipeline | Initial version: project structure, a single naive train/test split (no cross-validation), minimal preprocessing (drop rows with missing values, one-hot encode categoricals), logistic regression baseline, a first (deliberately simple) fairness check comparing our model's and COMPAS's own false-positive rate by race, train-vs-test accuracy reporting (to start spotting overfitting), and each run's full report saved automatically to `results/` |
 | 5 | Hyperparameter tuning | Optuna tunes the selected model on development data using CV of the full pipeline; nested CV estimates the tuning procedure honestly; the locked test set remains untouched |
 | 7 | Boosting & evaluation metrics | Added Gaussian Naive Bayes, gradient boosting and histogram gradient boosting; eight CV metrics with ROC-AUC as the selection metric; out-of-fold probabilities, confusion matrix and group fairness reports; nested tuning, a corrected paired t-test for optional feature selection, and a per-run scoreboard in `results/runs.csv`. |
+| 8 | XGBoost & feature selection | Added XGBoost to the model registry and tuning search; a leak-safe voting selector is fitted inside each CV fold, with cached pipeline steps, nested tuning of the vote threshold, selected-feature reporting, and feature-selection settings recorded in the results and scoreboard. |
 
-**W7 selection metric:** ROC-AUC is the selection metric because it measures how well the model ranks positive cases across thresholds, without tying model selection to one classification cutoff. Accuracy, balanced accuracy, precision, recall, F1, F-beta (beta=2) and average precision are reported alongside it to make the trade-offs visible.
-
-**W7 scoreboard:** development-set scores on the same stratified 5-fold split; tuned scores use nested CV with five Optuna trials per model. The dummy is the no-model floor, and the locked test set was not used.
-
-| Model | Tuned | ROC-AUC (mean ± std) | Untuned ROC-AUC | Dummy floor |
-|-------|-------|----------------------|-----------------|-------------|
-| AdaBoost | Yes | 0.727 ± 0.013 | 0.721 | 0.500 |
-| Oblique random forest | Yes | 0.727 ± 0.011 | 0.680 | 0.500 |
-| Gradient boosting | Yes | 0.725 ± 0.012 | 0.725 | 0.500 |
-| Random forest | Yes | 0.725 ± 0.014 | 0.684 | 0.500 |
-| HistGradientBoosting | Yes | 0.723 ± 0.014 | 0.713 | 0.500 |
-| Logistic regression | Yes | 0.722 ± 0.012 | 0.723 | 0.500 |
-| Decision tree | Yes | 0.715 ± 0.010 | 0.595 | 0.500 |
-| Naive Bayes | Yes | 0.700 ± 0.011 | 0.700 | 0.500 |
-| Dummy | No | 0.500 ± 0.000 | 0.500 | 0.500 |
-
-`results/runs.csv` stores the per-fold values and run settings behind this table. It is regenerated/appended by `python main.py` for each selected model run.
 
 ## Environment setup
 
