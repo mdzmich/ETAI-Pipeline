@@ -1,0 +1,115 @@
+# Adult income configuration for the "Beyond COMPAS" task.
+
+data:
+  path: "data/adult_train.csv"
+  new_path: "data/adult_new.csv"
+  target: "income_over_50k"
+  sensitive_attr: "sex"
+  drop_columns: ["id", "fnlwgt", "education"]
+
+diagnostics:
+  placeholder_tokens: ["?"]
+  numeric_text_columns: []
+  validity_rules:
+    age: {min: 17, max: 90}
+    hours_per_week: {min: 1, max: 99}
+    capital_gain: {min: 0}
+    capital_loss: {min: 0}
+    education_num: {min: 1, max: 16}
+  canonical_categories:
+    sex: {male: "Male", female: "Female"}
+    workclass: {self_emp_not_inc: "Self-emp-not-inc", self_emp_inc: "Self-emp-inc", federal_gov: "Federal-gov", local_gov: "Local-gov", state_gov: "State-gov", private: "Private", without_pay: "Without-pay", never_worked: "Never-worked"}
+    occupation: {}
+    marital_status: {married_civ_spouse: "Married-civ-spouse", divorced: "Divorced", never_married: "Never-married", separated: "Separated", widowed: "Widowed", married_spouse_absent: "Married-spouse-absent", married_AF_spouse: "Married-AF-spouse"}
+    relationship: {wife: "Wife", husband: "Husband", own_child: "Own-child", unmarried: "Unmarried", not_in_family: "Not-in-family", other_relative: "Other-relative"}
+    race: {white: "White", black: "Black", asian_pac_islander: "Asian-Pac-Islander", amer_indian_eskimo: "Amer-Indian-Eskimo", other: "Other"}
+    native_country: {united_states: "United-States", mexico: "Mexico", philippines: "Philippines", germany: "Germany", canada: "Canada", puerto_rico: "Puerto-Rico", dominican_republic: "Dominican-Republic", jamaica: "Jamaica", india: "India", cuba: "Cuba", england: "England", china: "China", south: "South", italy: "Italy", japan: "Japan", haiti: "Haiti", guatemala: "Guatemala", poland: "Poland", vietnam: "Vietnam", colombia: "Colombia", el_salvador: "El-Salvador", dominican_republic: "Dominican-Republic", nicaragua: "Nicaragua", peru: "Peru", outlying_us_uscg: "Outlying-US(Guam-USVI-etc)", thailand: "Thailand", ecuador: "Ecuador", laos: "Laos", taiwan: "Taiwan", honduras: "Honduras", ireland: "Ireland", portugal: "Portugal", france: "France", honduras: "Honduras", iran: "Iran", scotland: "Scotland", trinidad_and_tobago: "Trinidad-and-Tobago", greece: "Greece", cambodia: "Cambodia", yugoslavia: "Yugoslavia"}
+  id_column: "id"
+  redundant_columns: ["education"]
+
+test_set:
+  size: 0.2
+  random_state: 42
+
+holdout:
+  size: 0.25
+  random_state: 42
+
+preprocessing:
+  encoder: "target"
+  scaler: "standard"
+  random_state: 42
+  numeric_features: ["age", "education_num", "capital_gain", "capital_loss", "hours_per_week", "v01", "v02", "v03", "v04", "v05", "v06", "v07", "v08", "v09", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18"]
+  categorical_features: ["workclass", "marital_status", "occupation", "relationship", "race", "native_country", "v19", "v20", "v21", "v22", "v23", "v24", "v25"]
+  mnar_indicator_sources: ["workclass", "occupation"]
+  imputation:
+    numeric_strategy: "median"
+    categorical_strategy: "most_frequent"
+
+cv:
+  n_splits: 5
+  shuffle: true
+  random_state: 42
+  metrics: ["accuracy", "balanced_accuracy", "precision", "recall", "f1", "fbeta_2", "roc_auc", "average_precision"]
+  selection_metric: "roc_auc"
+  n_jobs: 1
+
+model_comparison:
+  dummy: {type: "dummy", params: {}}
+  logistic_regression: {type: "logistic_regression", params: {max_iter: 2000}}
+  decision_tree: {type: "decision_tree", params: {random_state: 42}}
+  random_forest: {type: "random_forest", params: {n_estimators: 300, random_state: 42, n_jobs: -1}}
+
+model:
+  type: "xgboost"
+  params:
+    random_state: 42
+    n_estimators: 200
+    max_depth: 3
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    eval_metric: "logloss"
+
+feature_selection:
+  enabled: true
+  method: vote
+  min_votes: 2
+  k: 4
+  threshold: mean
+  random_state: 42
+  search_space:
+    select__min_votes: {type: categorical, choices: [1, 2, 3]}
+
+tuning:
+  enabled: false
+  n_trials: 5
+  n_splits: 5
+  random_state: 42
+  search_spaces:
+    decision_tree:
+      model__max_depth: {type: int, low: 1, high: 20}
+      model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
+      model__criterion: {type: categorical, choices: ["gini", "entropy"]}
+      prep__numeric__impute__strategy: {type: categorical, choices: ["median", "mean"]}
+    logistic_regression:
+      model__C: {type: float, low: 0.0001, high: 100, log: true}
+    random_forest:
+      model__max_depth: {type: int, low: 2, high: 30}
+      model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
+      model__max_features: {type: categorical, choices: ["sqrt", 0.5, 1.0]}
+    xgboost:
+      model__n_estimators: {type: int, low: 100, high: 600, log: true}
+      model__max_depth: {type: int, low: 2, high: 8}
+      model__learning_rate: {type: float, low: 0.01, high: 0.3, log: true}
+      model__subsample: {type: float, low: 0.6, high: 1.0}
+      model__colsample_bytree: {type: float, low: 0.5, high: 1.0}
+      model__min_child_weight: {type: float, low: 1.0, high: 20.0, log: true}
+      model__gamma: {type: float, low: 0.0, high: 5.0}
+      model__reg_alpha: {type: float, low: 0.0001, high: 10.0, log: true}
+      model__reg_lambda: {type: float, low: 0.0001, high: 10.0, log: true}
+
+output:
+  results_dir: "results_adult"
+  scoreboard: "results_adult/runs.csv"
+  predictions_path: "results_adult/adult_new_predictions.csv"

@@ -1,0 +1,347 @@
+Run: 20261111_120952_234214
+Model: xgboost  params={'random_state': 42, 'n_estimators': 200, 'max_depth': 3, 'learning_rate': 0.05, 'subsample': 0.8, 'colsample_bytree': 0.8, 'eval_metric': 'logloss'}
+Feature selection: {'enabled': True, 'method': 'vote', 'min_votes': 2, 'k': 4, 'threshold': 'mean', 'random_state': 42, 'search_space': {'select__min_votes': {'type': 'categorical', 'choices': [1, 2, 3]}}}
+Locked test size: 0.2  random_state: 42
+Holdout validation size: 0.25  random_state: 42
+CV: 5 folds, metrics=['accuracy', 'balanced_accuracy', 'precision', 'recall', 'f1', 'fbeta_2', 'roc_auc', 'average_precision'], selection_metric=roc_auc, random_state=42
+Tuning: False
+============================================================
+
+Model comparison (same holdout split and CV folds):
+
+                     holdout train  holdout validation  CV roc_auc mean  CV roc_auc std  CV train-validation gap
+model                                                                                                           
+dummy                        0.761               0.761            0.500           0.000                    0.000
+logistic_regression          0.847               0.848            0.894           0.013                    0.008
+decision_tree                0.932               0.802            0.720           0.020                    0.212
+random_forest                0.979               0.854            0.900           0.016                    0.099
+xgboost                      0.871               0.861            0.910           0.016                    0.016
+
+Default hyperparameters: roc_auc = 0.910
+No-model floor (dummy, same folds): roc_auc = 0.500
+
+
+Feature selection comparison (positive difference = selection wins)
+  mean difference: +0.003
+  wins: 5/5
+  corrected paired t: 2.328
+  p-value: 0.080
+
+
+dummy - without cross-validation
+Holdout evaluation (development set)
+Train accuracy:      0.761
+Validation accuracy: 0.761
+Gap (train - validation): -0.000
+
+Classification report (validation set):
+              precision    recall  f1-score   support
+
+           0       0.76      1.00      0.86       913
+           1       0.00      0.00      0.00       287
+
+    accuracy                           0.76      1200
+   macro avg       0.38      0.50      0.43      1200
+weighted avg       0.58      0.76      0.66      1200
+
+
+dummy - with cross-validation
+Cross-validation (5 folds, selection metric: roc_auc)
+
+ fold  train  validation   gap  accuracy  balanced_accuracy  precision  recall    f1  fbeta_2  roc_auc  average_precision
+    1  0.500       0.500 0.000     0.761              0.500      0.000   0.000 0.000    0.000    0.500              0.239
+    2  0.500       0.500 0.000     0.760              0.500      0.000   0.000 0.000    0.000    0.500              0.240
+    3  0.500       0.500 0.000     0.760              0.500      0.000   0.000 0.000    0.000    0.500              0.240
+    4  0.500       0.500 0.000     0.760              0.500      0.000   0.000 0.000    0.000    0.500              0.240
+    5  0.500       0.500 0.000     0.760              0.500      0.000   0.000 0.000    0.000    0.500              0.240
+
+                   mean   std
+accuracy          0.761 0.000
+balanced_accuracy 0.500 0.000
+precision         0.000 0.000
+recall            0.000 0.000
+f1                0.000 0.000
+fbeta_2           0.000 0.000
+roc_auc           0.500 0.000
+average_precision 0.239 0.000
+
+roc_auc train-validation gap mean = +0.000
+
+Out-of-fold predictions, development set (threshold 0.5):
+
+        predicted 0  predicted 1
+true 0         3651            0
+true 1         1149            0
+
+              precision    recall  f1-score   support
+
+           0       0.76      1.00      0.86      3651
+           1       0.00      0.00      0.00      1149
+
+    accuracy                           0.76      4800
+   macro avg       0.38      0.50      0.43      4800
+weighted avg       0.58      0.76      0.66      4800
+
+False positive rate by sex (development set, out-of-fold)
+(share of people who did NOT reoffend, but were predicted to)
+
+  Our model:
+    Female               FPR = 0.00  (n=1390)
+    Male                 FPR = 0.00  (n=2261)
+
+
+
+logistic_regression - without cross-validation
+Holdout evaluation (development set)
+Train accuracy:      0.847
+Validation accuracy: 0.848
+Gap (train - validation): -0.000
+
+Classification report (validation set):
+              precision    recall  f1-score   support
+
+           0       0.87      0.93      0.90       913
+           1       0.73      0.57      0.64       287
+
+    accuracy                           0.85      1200
+   macro avg       0.80      0.75      0.77      1200
+weighted avg       0.84      0.85      0.84      1200
+
+
+logistic_regression - with cross-validation
+Cross-validation (5 folds, selection metric: roc_auc)
+
+ fold  train  validation    gap  accuracy  balanced_accuracy  precision  recall    f1  fbeta_2  roc_auc  average_precision
+    1  0.902       0.893  0.008     0.844              0.753      0.711   0.581 0.639    0.603    0.893              0.747
+    2  0.904       0.893  0.011     0.835              0.724      0.722   0.509 0.597    0.541    0.893              0.718
+    3  0.898       0.914 -0.016     0.849              0.753      0.740   0.570 0.644    0.597    0.914              0.781
+    4  0.907       0.876  0.030     0.839              0.739      0.712   0.548 0.619    0.574    0.876              0.718
+    5  0.902       0.896  0.006     0.858              0.776      0.747   0.617 0.676    0.640    0.896              0.762
+
+                   mean   std
+accuracy          0.845 0.009
+balanced_accuracy 0.749 0.019
+precision         0.727 0.016
+recall            0.565 0.040
+f1                0.635 0.030
+fbeta_2           0.591 0.037
+roc_auc           0.894 0.013
+average_precision 0.745 0.028
+
+roc_auc train-validation gap mean = +0.008
+
+Out-of-fold predictions, development set (threshold 0.5):
+
+        predicted 0  predicted 1
+true 0         3407          244
+true 1          500          649
+
+              precision    recall  f1-score   support
+
+           0       0.87      0.93      0.90      3651
+           1       0.73      0.56      0.64      1149
+
+    accuracy                           0.84      4800
+   macro avg       0.80      0.75      0.77      4800
+weighted avg       0.84      0.84      0.84      4800
+
+False positive rate by sex (development set, out-of-fold)
+(share of people who did NOT reoffend, but were predicted to)
+
+  Our model:
+    Female               FPR = 0.01  (n=1390)
+    Male                 FPR = 0.10  (n=2261)
+
+
+
+decision_tree - without cross-validation
+Holdout evaluation (development set)
+Train accuracy:      0.932
+Validation accuracy: 0.802
+Gap (train - validation): +0.129
+
+Classification report (validation set):
+              precision    recall  f1-score   support
+
+           0       0.87      0.87      0.87       913
+           1       0.59      0.60      0.59       287
+
+    accuracy                           0.80      1200
+   macro avg       0.73      0.73      0.73      1200
+weighted avg       0.80      0.80      0.80      1200
+
+
+decision_tree - with cross-validation
+Cross-validation (5 folds, selection metric: roc_auc)
+
+ fold  train  validation   gap  accuracy  balanced_accuracy  precision  recall    f1  fbeta_2  roc_auc  average_precision
+    1  0.925       0.688 0.237     0.780              0.688      0.542   0.511 0.526    0.517    0.688              0.393
+    2  0.946       0.730 0.216     0.791              0.730      0.557   0.613 0.584    0.601    0.730              0.434
+    3  0.922       0.740 0.182     0.822              0.740      0.641   0.583 0.610    0.593    0.740              0.474
+    4  0.935       0.728 0.206     0.804              0.728      0.593   0.583 0.588    0.585    0.728              0.445
+    5  0.931       0.713 0.217     0.791              0.713      0.563   0.565 0.564    0.565    0.713              0.422
+
+                   mean   std
+accuracy          0.797 0.016
+balanced_accuracy 0.720 0.020
+precision         0.579 0.039
+recall            0.571 0.038
+f1                0.574 0.032
+fbeta_2           0.572 0.034
+roc_auc           0.720 0.020
+average_precision 0.434 0.029
+
+roc_auc train-validation gap mean = +0.212
+
+Out-of-fold predictions, development set (threshold 0.5):
+
+        predicted 0  predicted 1
+true 0         3172          479
+true 1          493          656
+
+              precision    recall  f1-score   support
+
+           0       0.87      0.87      0.87      3651
+           1       0.58      0.57      0.57      1149
+
+    accuracy                           0.80      4800
+   macro avg       0.72      0.72      0.72      4800
+weighted avg       0.80      0.80      0.80      4800
+
+False positive rate by sex (development set, out-of-fold)
+(share of people who did NOT reoffend, but were predicted to)
+
+  Our model:
+    Female               FPR = 0.06  (n=1390)
+    Male                 FPR = 0.17  (n=2261)
+
+
+
+random_forest - without cross-validation
+Holdout evaluation (development set)
+Train accuracy:      0.979
+Validation accuracy: 0.854
+Gap (train - validation): +0.124
+
+Classification report (validation set):
+              precision    recall  f1-score   support
+
+           0       0.87      0.95      0.91       913
+           1       0.77      0.55      0.65       287
+
+    accuracy                           0.85      1200
+   macro avg       0.82      0.75      0.78      1200
+weighted avg       0.85      0.85      0.85      1200
+
+
+random_forest - with cross-validation
+Cross-validation (5 folds, selection metric: roc_auc)
+
+ fold  train  validation   gap  accuracy  balanced_accuracy  precision  recall    f1  fbeta_2  roc_auc  average_precision
+    1  0.999       0.901 0.098     0.865              0.772      0.786   0.594 0.677    0.624    0.901              0.783
+    2  0.999       0.897 0.102     0.835              0.709      0.754   0.465 0.575    0.504    0.897              0.744
+    3  0.999       0.920 0.079     0.872              0.773      0.832   0.583 0.685    0.620    0.920              0.823
+    4  0.999       0.877 0.122     0.840              0.728      0.738   0.513 0.605    0.546    0.877              0.728
+    5  0.999       0.906 0.094     0.863              0.774      0.772   0.604 0.678    0.632    0.906              0.785
+
+                   mean   std
+accuracy          0.855 0.016
+balanced_accuracy 0.751 0.031
+precision         0.776 0.036
+recall            0.552 0.060
+f1                0.644 0.050
+fbeta_2           0.585 0.057
+roc_auc           0.900 0.016
+average_precision 0.773 0.037
+
+roc_auc train-validation gap mean = +0.099
+
+Out-of-fold predictions, development set (threshold 0.5):
+
+        predicted 0  predicted 1
+true 0         3462          189
+true 1          513          636
+
+              precision    recall  f1-score   support
+
+           0       0.87      0.95      0.91      3651
+           1       0.77      0.55      0.64      1149
+
+    accuracy                           0.85      4800
+   macro avg       0.82      0.75      0.78      4800
+weighted avg       0.85      0.85      0.84      4800
+
+False positive rate by sex (development set, out-of-fold)
+(share of people who did NOT reoffend, but were predicted to)
+
+  Our model:
+    Female               FPR = 0.01  (n=1390)
+    Male                 FPR = 0.08  (n=2261)
+
+
+
+xgboost - without cross-validation
+Holdout evaluation (development set)
+Train accuracy:      0.871
+Validation accuracy: 0.861
+Gap (train - validation): +0.010
+
+Classification report (validation set):
+              precision    recall  f1-score   support
+
+           0       0.88      0.94      0.91       913
+           1       0.76      0.61      0.68       287
+
+    accuracy                           0.86      1200
+   macro avg       0.82      0.77      0.79      1200
+weighted avg       0.85      0.86      0.86      1200
+
+
+xgboost - with cross-validation
+Cross-validation (5 folds, selection metric: roc_auc)
+
+ fold  train  validation    gap  accuracy  balanced_accuracy  precision  recall    f1  fbeta_2  roc_auc  average_precision
+    1  0.928       0.912  0.016     0.868              0.792      0.763   0.646 0.700    0.667    0.912              0.803
+    2  0.926       0.911  0.015     0.851              0.741      0.777   0.530 0.630    0.566    0.911              0.782
+    3  0.920       0.934 -0.014     0.868              0.788      0.772   0.635 0.697    0.658    0.934              0.843
+    4  0.932       0.888  0.043     0.844              0.750      0.720   0.570 0.636    0.594    0.888              0.761
+    5  0.926       0.906  0.020     0.860              0.786      0.740   0.643 0.688    0.661    0.906              0.798
+
+                   mean   std
+accuracy          0.858 0.011
+balanced_accuracy 0.771 0.024
+precision         0.754 0.024
+recall            0.605 0.052
+f1                0.670 0.034
+fbeta_2           0.629 0.046
+roc_auc           0.910 0.016
+average_precision 0.798 0.030
+
+roc_auc train-validation gap mean = +0.016
+
+Out-of-fold predictions, development set (threshold 0.5):
+
+        predicted 0  predicted 1
+true 0         3424          227
+true 1          454          695
+
+              precision    recall  f1-score   support
+
+           0       0.88      0.94      0.91      3651
+           1       0.75      0.60      0.67      1149
+
+    accuracy                           0.86      4800
+   macro avg       0.82      0.77      0.79      4800
+weighted avg       0.85      0.86      0.85      4800
+
+False positive rate by sex (development set, out-of-fold)
+(share of people who did NOT reoffend, but were predicted to)
+
+  Our model:
+    Female               FPR = 0.02  (n=1390)
+    Male                 FPR = 0.09  (n=2261)
+
+
+Scoreboard:
+                   run   model  tuned encoder   scaler  roc_auc   std  untuned  floor
+20261111_120952_234214 xgboost  False  target standard    0.910 0.016    0.910  0.500

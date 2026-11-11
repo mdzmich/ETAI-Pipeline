@@ -47,10 +47,10 @@ def _canonicalize_categories(df: pd.DataFrame, columns_and_maps: dict, placehold
         cleaned = out[column].astype("string").str.strip()
         lowered = cleaned.str.lower()
         normalized_mapping = {str(key).strip().lower(): value for key, value in mapping.items()}
-        normalized = (
-            lowered.map(normalized_mapping).fillna(cleaned)
-            .astype("string").mask(lowered.isin(tokens))
-        )
+        normalized = cleaned.copy()
+        if normalized_mapping:
+            normalized = lowered.map(normalized_mapping).fillna(cleaned)
+        normalized = normalized.astype("string").mask(lowered.isin(tokens), np.nan)
         out[column] = normalized.astype(object).where(normalized.notna(), np.nan)
     return out
 

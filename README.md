@@ -61,7 +61,6 @@ The key lesson from the warm-up is that a feature does not help every model in t
 The model comparison showed that tuning matters, but not equally for every family. The tuned random forest achieved the strongest honest nested-CV result in this run, while logistic regression remained close and more stable. The decision tree was noticeably worse, which fits the expected pattern of high variance and larger train-validation gaps. The ensemble improvements were real but modest, and the gap to logistic regression was small enough that the final choice should be reported with caution rather than as a clear win.
 
 
-### Ensembles
 | Model | Default: CV mean ± std (gap) | Tuned: nested CV mean ± std (gap) | Tuning score (best trial) | Chosen hyperparameters |
 |---|---|---|---|---|
 | Logistic regression | 0.658 ± 0.011 | — | — | — |
@@ -110,7 +109,30 @@ With five Optuna trials and identical seeded nested 5-fold CV, tuned XGBoost sco
 **W8 optional selector challenges:** The configuration now supports `feature_selection.method: vote | kbest | from_model`. Compared on the same five folds with the same tuned XGBoost parameters, all three selected the same four features and produced identical ROC-AUC (**0.724 ± 0.012**); corrected paired tests were **p = 1.000**. In one end-to-end timing run, `kbest` took **1.59 s**, `from_model` **5.49 s**, and `vote` **7.34 s**, making `kbest` fastest for the same score on this dataset (timings are environment-dependent). For B2, nested tuning selected `min_votes` **3, 2, 3, 3, 2** in the five outer folds, but selected **1** when tuned on all development data; the fold-to-fold variation shows the best threshold is not stable on every training subset.
 
 
+WEEK 9 --
 
+**Beyond COMPAS**
+
+I completed the task using the Adult-income option. The project now accepts a config file argument, so the original COMPAS run still works with `python main.py` while the new adult run is launched with `python main.py config_adult.yaml`.
+
+What broke and how it was fixed:
+
+| Problem | Why it broke | Fix |
+|---|---|---|
+| Placeholder `?` values were not always converted to missing | the cleaning logic only canonicalized columns explicitly listed in the config, and `occupation` was missing from the Adult list | added `occupation: {}` to `diagnostics.canonical_categories` and generalized placeholder handling so configured columns are cleaned even when they do not need a category map |
+| Sensitive attribute was still treated as a normal feature | `split_features_target()` excluded only the configured sensitive column, while the Adult config had `sex` still listed in the categorical feature list | removed `sex` from `categorical_features` and kept it as the audit attribute for the fairness report |
+| Binary-only assumptions leaked into evaluation code | helper functions assumed the positive class was always class 1 and expected a single probability column | made probability extraction and OOF reporting work for both binary outputs and multiclass-style probability matrices, while preserving the binary COMPAS run |
+| Feature selector assumed a 1D logistic coefficient array | the vote selector used `lasso.coef_[0]`, which is valid for binary tasks but not for multiclass problems | switched to the maximum absolute coefficient across classes and kept the same vote logic for binary runs |
+
+Results from the Adult run (development-set CV, same folds as the pipeline reports):
+
+| Model | ROC-AUC | Accuracy | F1 (class 1) |
+|---|---:|---:|---:|
+| XGBoost | 0.910 | 0.858 | 0.670 |
+| Random forest | 0.900 | 0.855 | 0.644 |
+| Logistic regression | 0.894 | 0.845 | 0.635 |
+
+The hardest assumption to find was the silent dependence on COMPAS-specific columns and binary-only metric logic. Once the pipeline became config-driven and the cleaning/evaluation helpers were generalized, the Adult run reached the target thresholds comfortably and the original COMPAS path remained unchanged. The final Adult model kept the most useful numeric and categorical information, and I saved the 2,000-row new-person predictions to `results_adult/adult_new_predictions.csv`.
 
 
 
@@ -166,6 +188,7 @@ This table is updated after each practical class, so you can always see what cha
 | 5 | Hyperparameter tuning | Optuna tunes the selected model on development data using CV of the full pipeline; nested CV estimates the tuning procedure honestly; the locked test set remains untouched |
 | 7 | Boosting & evaluation metrics | Added Gaussian Naive Bayes, gradient boosting and histogram gradient boosting; eight CV metrics with ROC-AUC as the selection metric; out-of-fold probabilities, confusion matrix and group fairness reports; nested tuning, a corrected paired t-test for optional feature selection, and a per-run scoreboard in `results/runs.csv`. |
 | 8 | XGBoost & feature selection | Added XGBoost to the model registry and tuning search; a leak-safe voting selector is fitted inside each CV fold, with cached pipeline steps, nested tuning of the vote threshold, selected-feature reporting, and feature-selection settings recorded in the results and scoreboard. |
+| 9 | Beyond COMPAS | Added config-driven support for a second dataset (`config_adult.yaml`), generalized preprocessing so placeholder tokens and binary assumptions no longer depend on COMPAS columns, and an Adult-income run producing a valid prediction file for the 2,000 new rows while keeping the original COMPAS pipeline unchanged. |
 
 
 ## Environment setup

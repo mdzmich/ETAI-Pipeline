@@ -53,11 +53,14 @@ def _positive_probability(estimator, X) -> np.ndarray:
         raise TypeError(
             f"{type(estimator).__name__} does not provide predict_proba required for OOF metrics"
         )
+    probabilities = estimator.predict_proba(X)
     classes = np.asarray(estimator.classes_)
+    if probabilities.ndim == 1:
+        return probabilities
     positive = np.flatnonzero(classes == 1)
-    if len(positive) != 1:
-        raise ValueError(f"Expected a binary estimator with positive class 1; got {classes!r}")
-    return estimator.predict_proba(X)[:, positive[0]]
+    if len(positive) == 1:
+        return probabilities[:, positive[0]]
+    return probabilities
 
 
 def evaluate(y_train, y_train_pred, y_test, y_pred) -> str:
@@ -107,20 +110,17 @@ def fairness_report(
     sensitive_attr: str = "race",
     threshold: float = 0.5,
 ) -> str:
-    """
-    Deliberately simple fairness check -- not a substitute for a real audit, just enough to show that "accuracy" and "fair" are not the same thing.
-
-    For each race group, prints (and returns as text) the false
-    positive rate (share of people who did NOT reoffend but were
-    predicted to) for:
-        - our own model
-        - COMPAS's own risk score (score_text != "Low" counts as a "high risk" prediction), for comparison
-    """
-    df = extras.copy()
+    """Report false-positive rates by group for binary targets; COMPAS comparison is optional."""
+    df = extras.copy() if extras is not None else pd.DataFrame()
+    if df.empty:
+        return "Fairness report skipped: no metadata was supplied."
     df[sensitive_attr] = df[sensitive_attr].astype(object).fillna("unknown")
     df["y_true"] = np.asarray(y_true)
-    df["y_pred_model"] = (np.asarray(oof_proba) >= threshold).astype(int)
-    df["y_pred_compas"] = (df["score_text"] != "Low").astype(int)
+    scores = np.asarray(oof_proba)
+    if scores.ndim == 2:
+        df["y_pred_model"] = scores.argmax(axis=1)
+    else:
+        df["y_pred_model"] = (scores >= threshold).astype(int)
 
     lines = [
         f"False positive rate by {sensitive_attr} (development set, out-of-fold)",
@@ -128,11 +128,19 @@ def fairness_report(
         "",
     ]
 
-    for label, col in [("Our model", "y_pred_model"), ("COMPAS's own score", "y_pred_compas")]:
+    if "score_text" in df.columns:
+        df["y_pred_compas"] = (df["score_text"] != "Low").astype(int)
+        comparison_pairs = [("Our model", "y_pred_model"), ("COMPAS's own score", "y_pred_compas")]
+    else:
+        comparison_pairs = [("Our model", "y_pred_model")]
+
+    for label, col in comparison_pairs:
         lines.append(f"  {label}:")
         for group, g in df.groupby(sensitive_attr, dropna=False):
             negatives = g[g["y_true"] == 0]
             if len(negatives) == 0:
+                continue
+            if col == "y_pred_model" and "y_pred_model" not in g.columns:
                 continue
             fpr = (negatives[col] == 1).mean()
             lines.append(f"    {str(group):<20s} FPR = {fpr:.2f}  (n={len(negatives)})")
@@ -221,17 +229,32 @@ def oof_classification_report(
     y_true, oof_proba, threshold: float = 0.5
 ) -> str:
     """Format a confusion matrix and classification report from OOF probabilities."""
-    y_pred = (np.asarray(oof_proba) >= threshold).astype(int)
-    matrix = pd.DataFrame(
-        confusion_matrix(y_true, y_pred, labels=[0, 1]),
-        index=["true 0", "true 1"],
-        columns=["predicted 0", "predicted 1"],
-    )
-    text = (
-        f"Out-of-fold predictions, development set (threshold {threshold}):\n\n"
-        f"{matrix.to_string()}\n\n"
-        f"{classification_report(y_true, y_pred, zero_division=0)}"
-    )
+    probabilities = np.asarray(oof_proba)
+    if probabilities.ndim == 2:
+        y_pred = probabilities.argmax(axis=1)
+        labels = np.unique(np.asarray(y_true))
+        matrix = pd.DataFrame(
+            confusion_matrix(y_true, y_pred, labels=labels),
+            index=[f"true {label}" for label in labels],
+            columns=[f"predicted {label}" for label in labels],
+        )
+        text = (
+            "Out-of-fold predictions, development set (argmax):\n\n"
+            f"{matrix.to_string()}\n\n"
+            f"{classification_report(y_true, y_pred, zero_division=0)}"
+        )
+    else:
+        y_pred = (probabilities >= threshold).astype(int)
+        matrix = pd.DataFrame(
+            confusion_matrix(y_true, y_pred, labels=[0, 1]),
+            index=["true 0", "true 1"],
+            columns=["predicted 0", "predicted 1"],
+        )
+        text = (
+            f"Out-of-fold predictions, development set (threshold {threshold}):\n\n"
+            f"{matrix.to_string()}\n\n"
+            f"{classification_report(y_true, y_pred, zero_division=0)}"
+        )
     print(text)
     return text
 

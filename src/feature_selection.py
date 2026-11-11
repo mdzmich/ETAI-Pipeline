@@ -32,10 +32,15 @@ class VoteSelector(SelectorMixin, BaseEstimator):
             random_state=self.random_state,
         ).fit(X, y)
 
+        lasso_coef = np.asarray(lasso.coef_)
+        if lasso_coef.ndim == 1:
+            lasso_abs = np.abs(lasso_coef)
+        else:
+            lasso_abs = np.max(np.abs(lasso_coef), axis=0)
         self.votes_ = (
             (forest.feature_importances_ > forest.feature_importances_.mean()).astype(int)
             + (booster.feature_importances_ > booster.feature_importances_.mean()).astype(int)
-            + (np.abs(lasso.coef_[0]) > 1e-8).astype(int)
+            + (lasso_abs > 1e-8).astype(int)
         )
         self.support_ = self.votes_ >= self.min_votes
         self.n_features_in_ = self.votes_.size

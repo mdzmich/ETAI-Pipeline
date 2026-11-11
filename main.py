@@ -9,9 +9,12 @@ This orchestrates the full (deliberately simple) pipeline:
     -> refit on development data -> save results
 """
 import atexit
+import argparse
+import os
 import tempfile
 from datetime import datetime
 
+import numpy as np
 import yaml
 import pandas as pd
 from sklearn.metrics import accuracy_score
@@ -44,8 +47,38 @@ def load_config(path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run the ETAI pipeline on a chosen config file.")
+    parser.add_argument("config", nargs="?", default="config.yaml", help="Path to the YAML config file.")
+    return parser.parse_args()
+
+
+def save_predictions(model, X_new, id_column: str, output_path: str) -> None:
+    """Score a label-free dataset with the refit pipeline and save id/probability/prediction."""
+    if not hasattr(model, "predict_proba"):
+        raise TypeError(f"{type(model).__name__} does not provide predict_proba; cannot generate probabilities.")
+    class_labels = np.asarray(model.classes_)
+    if class_labels.ndim != 1:
+        raise ValueError(f"Unexpected class labels shape: {class_labels.shape!r}")
+    positive_index = np.flatnonzero(class_labels == 1)
+    if len(positive_index) != 1:
+        raise ValueError(f"Expected a binary target with positive class 1; got classes {class_labels!r}")
+    probabilities = model.predict_proba(X_new)[:, positive_index[0]]
+    predictions = (probabilities >= 0.5).astype(int)
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    pd.DataFrame({
+        id_column: X_new[id_column].to_numpy() if id_column in X_new.columns else np.arange(len(X_new)),
+        "probability": probabilities,
+        "prediction": predictions,
+    }).to_csv(output_path, index=False)
+
+
 def main():
-    config = load_config()
+    args = parse_args()
+    config = load_config(args.config)
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     cache = tempfile.TemporaryDirectory(prefix="pipeline_cache_")
     atexit.register(cache.cleanup)
@@ -328,6 +361,34 @@ def main():
             final_model.named_steps["select"].get_support()
         ]
     print(f"Features kept: {', '.join(map(str, features_kept))}")
+
+    new_data_path = config.get("data", {}).get("new_path")
+    if new_data_path:
+        new_df = load_data(new_data_path)
+        new_df_clean = clean_dataset(new_df, config["diagnostics"])
+        new_id = new_df_clean[config["diagnostics"].get("id_column", "id")].copy() if config["diagnostics"].get("id_column", "id") in new_df_clean.columns else pd.Series(range(len(new_df_clean)))
+        new_X, _, _ = split_features_target(
+            new_df_clean,
+            config["data"],
+            config["preprocessing"].get("mnar_indicator_sources", []),
+        )
+        output_path = config.get("output", {}).get("predictions_path")
+        if output_path:
+            predictions = final_model.predict_proba(new_X)
+            positive_index = np.flatnonzero(final_model.classes_ == 1)
+            if len(positive_index) != 1:
+                raise ValueError(f"Expected a binary target with positive class 1; got classes {final_model.classes_!r}")
+            probs = predictions[:, positive_index[0]]
+            preds = (probs >= 0.5).astype(int)
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            pd.DataFrame({
+                config["diagnostics"].get("id_column", "id"): new_id.to_numpy(),
+                "probability": probs,
+                "prediction": preds,
+            }).to_csv(output_path, index=False)
+            print(f"Predictions for {len(new_df_clean)} rows saved to {output_path}")
 
     scoreboard_row = {
         "run": run_id,
