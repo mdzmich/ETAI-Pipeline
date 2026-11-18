@@ -43,11 +43,15 @@ def save_run(
     tuning_config = config.get("tuning", {})
     holdout_config = config.get("holdout", {})
     feature_selection_config = config.get("feature_selection", {})
+    preprocessing_config = config.get("preprocessing", {})
+    imputation_config = preprocessing_config.get("imputation", {})
 
     header = (
         f"Run: {timestamp}\n"
         f"Model: {config['model']['type']}  params={config['model'].get('params', {})}\n"
         f"Feature selection: {feature_selection_config if feature_selection_config.get('enabled', False) else {'enabled': False}}\n"
+        f"Numeric imputer: {imputation_config.get('numeric_strategy', 'median')}  "
+        f"imputation_settings={imputation_config}\n"
         f"Locked test size: {config['test_set']['size']}  "
         f"random_state: {config['test_set']['random_state']}\n"
         + (

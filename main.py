@@ -17,6 +17,7 @@ from datetime import datetime
 import numpy as np
 import yaml
 import pandas as pd
+import joblib
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
@@ -362,6 +363,12 @@ def main():
         ]
     print(f"Features kept: {', '.join(map(str, features_kept))}")
 
+    model_path = config.get("output", {}).get("model_path", "models/model.joblib")
+    os.makedirs(os.path.dirname(model_path) or ".", exist_ok=True)
+    final_model.set_params(memory=None)
+    joblib.dump(final_model, model_path)
+    print(f"Final fitted pipeline saved to {model_path}")
+
     new_data_path = config.get("data", {}).get("new_path")
     if new_data_path:
         new_df = load_data(new_data_path)
@@ -397,6 +404,7 @@ def main():
         "tuned": bool(tuning_config.get("enabled", False)),
         "encoder": config["preprocessing"]["encoder"],
         "scaler": config["preprocessing"]["scaler"],
+        "imputer": config["preprocessing"].get("imputation", {}).get("numeric_strategy", "median"),
         "feature_selection": str(
             feature_config if feature_config.get("enabled", False)
             else {"enabled": False}
@@ -419,9 +427,11 @@ def main():
         (runs["data"] == scoreboard_row["data"])
         & (runs["metric"] == selection_metric)
     ]
+    if "imputer" not in same_runs.columns:
+        same_runs = same_runs.assign(imputer="median")
     board = (
         same_runs.sort_values("mean", ascending=False)[
-            ["run", "model", "tuned", "encoder", "scaler", "mean", "std", "untuned", "floor"]
+            ["run", "model", "tuned", "encoder", "scaler", "imputer", "mean", "std", "untuned", "floor"]
         ]
         .rename(columns={"mean": selection_metric})
         .to_string(index=False, float_format=lambda value: f"{value:.3f}")

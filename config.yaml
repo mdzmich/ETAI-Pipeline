@@ -3,6 +3,7 @@
 
 data:
   path: "data/compas_two_year_recidivism.csv"
+  new_path: "data/compas_new_people.csv"
   target: "two_year_recid"
   sensitive_attr: "race"          # excluded from model features, used only to audit fairness
   drop_columns: ["id", "decile_score", "score_text"]  # identifiers / COMPAS's own score, not our model's inputs
@@ -50,6 +51,9 @@ preprocessing:
   imputation:
     numeric_strategy: "median"
     categorical_strategy: "most_frequent"
+    n_neighbors: 5
+    max_iter: 10
+    n_estimators: 50
 
 cv:
   n_splits: 5
@@ -139,3 +143,4 @@ tuning:
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
   scoreboard: "results/runs.csv"
+  model_path: "models/model.joblib"

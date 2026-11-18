@@ -135,8 +135,11 @@ Results from the Adult run (development-set CV, same folds as the pipeline repor
 The hardest assumption to find was the silent dependence on COMPAS-specific columns and binary-only metric logic. Once the pipeline became config-driven and the cleaning/evaluation helpers were generalized, the Adult run reached the target thresholds comfortably and the original COMPAS path remained unchanged. The final Adult model kept the most useful numeric and categorical information, and I saved the 2,000-row new-person predictions to `results_adult/adult_new_predictions.csv`.
 
 
+WEEK 10 --
 
+**Missing values:** on the same five CV folds, ROC-AUC was 0.7203 for median, 0.7195 for KNN, 0.7211 for iterative imputation, and 0.7192 for random-forest imputation. The corrected paired test found no significant improvement over the median (iterative: +0.0009, p=0.651), so median remains the default: it is simpler and faster without a measurable loss in score.
 
+**Deployment:** `python main.py` trained and saved `models/model.joblib`; `python predict.py data/compas_new_people.csv predictions.csv` completed successfully. The output has 20 rows (one per input), with columns `id`, positive-class `probability`, and binary `prediction` at the 0.5 threshold. Six rows were predicted positive; probabilities ranged from 0.189 to 0.866.
 
 
 
@@ -189,6 +192,7 @@ This table is updated after each practical class, so you can always see what cha
 | 7 | Boosting & evaluation metrics | Added Gaussian Naive Bayes, gradient boosting and histogram gradient boosting; eight CV metrics with ROC-AUC as the selection metric; out-of-fold probabilities, confusion matrix and group fairness reports; nested tuning, a corrected paired t-test for optional feature selection, and a per-run scoreboard in `results/runs.csv`. |
 | 8 | XGBoost & feature selection | Added XGBoost to the model registry and tuning search; a leak-safe voting selector is fitted inside each CV fold, with cached pipeline steps, nested tuning of the vote threshold, selected-feature reporting, and feature-selection settings recorded in the results and scoreboard. |
 | 9 | Beyond COMPAS | Added config-driven support for a second dataset (`config_adult.yaml`), generalized preprocessing so placeholder tokens and binary assumptions no longer depend on COMPAS columns, and an Adult-income run producing a valid prediction file for the 2,000 new rows while keeping the original COMPAS pipeline unchanged. |
+| 10 | Missing values & deployment | Added median, mean, KNN, MICE and missForest numerical imputers with scale-before-impute preprocessing, missingness flags and corrected-paired imputer comparisons; saved the final fitted pipeline and added standalone terminal prediction from a label-free CSV. |
 
 
 ## Environment setup

@@ -2,7 +2,9 @@
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
     MinMaxScaler,
@@ -145,6 +147,26 @@ _SCALERS = {
     "robust": RobustScaler,
 }
 
+_NUMERIC_IMPUTERS = {
+    "median": lambda cfg, seed: SimpleImputer(strategy="median"),
+    "mean": lambda cfg, seed: SimpleImputer(strategy="mean"),
+    "knn": lambda cfg, seed: KNNImputer(n_neighbors=cfg.get("n_neighbors", 5)),
+    "iterative": lambda cfg, seed: IterativeImputer(
+        max_iter=cfg.get("max_iter", 10),
+        random_state=seed,
+    ),
+    "random_forest": lambda cfg, seed: IterativeImputer(
+        estimator=RandomForestRegressor(
+            n_estimators=cfg.get("n_estimators", 50),
+            min_samples_leaf=5,
+            random_state=seed,
+            n_jobs=-1,
+        ),
+        max_iter=cfg.get("max_iter", 10),
+        random_state=seed,
+    ),
+}
+
 
 def _make_encoder(name: str, random_state: int):
     if name == "onehot":
@@ -169,9 +191,18 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     scaler_factory = _SCALERS[scaler_name]
     scaler = scaler_factory() if callable(scaler_factory) else scaler_factory
     imputation = preprocessing_config.get("imputation", {})
+    numeric_strategy = imputation.get("numeric_strategy", "median")
+    if numeric_strategy not in _NUMERIC_IMPUTERS:
+        raise ValueError(
+            f"Unknown numeric_strategy: {numeric_strategy}. "
+            f"Options: {list(_NUMERIC_IMPUTERS)}"
+        )
     numeric_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy=imputation.get("numeric_strategy", "median"))),
         ("scale", scaler),
+        ("impute", _NUMERIC_IMPUTERS[numeric_strategy](
+            imputation,
+            preprocessing_config.get("random_state"),
+        )),
     ])
     categorical_pipeline = Pipeline([
         ("impute", SimpleImputer(strategy=imputation.get("categorical_strategy", "most_frequent"))),
