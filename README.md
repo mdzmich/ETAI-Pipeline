@@ -143,7 +143,23 @@ WEEK 10 --
 
 
 
+WEEK 11 --
 
+**Outliers challenge:** Before running the comparison, I guessed that the anomaly score would not clearly improve COMPAS reoffending prediction. The unusual rows seemed more likely to be a heterogeneous tail than a clean reoffending subgroup.
+
+The direct check supported that guess: in the development data, the base reoffending rate was 45.1%. It was 58.3% in the top 5% by Isolation Forest score (290 people) versus 44.4% for everyone else, and 51.6% in the top 5% by LOF (289 people) versus 44.7% for everyone else. There is an association, especially for Isolation Forest, but it is not enough to replace or strongly improve the normal predictive features.
+
+I ran the same untuned XGBoost pipeline with `feature_selection` enabled and only the `anomaly.method` changed:
+
+| Anomaly setting | XGBoost ROC-AUC |
+|---|---:|
+| `none` | 0.720 ± 0.012 |
+| Isolation Forest | 0.717 ± 0.011 |
+| LOF (`k=20`) | 0.719 ± 0.013 |
+
+Against `none`, Isolation Forest had a mean difference of -0.0032 (p=0.281) and LOF -0.0012 (p=0.541) using the corrected paired comparison on the same five folds. Neither detector improved this run; both estimates are close to the baseline and the tests are not significant. The Isolation Forest anomaly column was retained by feature selection, but it was not enough to change the XGBoost ranking meaningfully. LOF was also retained.
+
+`python predict.py data/compas_new_people.csv predictions.csv` still returns 20 rows. The implementation remains available in `config.yaml` and defaults to `method: "none"`; set it to `isolation_forest` or `lof` to compare methods.
 
 
 

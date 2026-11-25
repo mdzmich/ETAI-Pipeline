@@ -80,6 +80,7 @@ def save_predictions(model, X_new, id_column: str, output_path: str) -> None:
 def main():
     args = parse_args()
     config = load_config(args.config)
+    anomaly_config = config.get("anomaly", {"method": "none"})
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     cache = tempfile.TemporaryDirectory(prefix="pipeline_cache_")
     atexit.register(cache.cleanup)
@@ -144,6 +145,7 @@ def main():
             config["preprocessing"],
             model_config,
             model_feature_config,
+            anomaly_config,
             memory=cache_dir,
         )
         holdout_model.fit(X_train, y_train)
@@ -154,6 +156,7 @@ def main():
                 config["preprocessing"],
                 model_config,
                 model_feature_config,
+                anomaly_config,
                 memory=cache_dir,
             ),
             X_dev,
@@ -189,6 +192,7 @@ def main():
         config["preprocessing"],
         config["model"],
         config.get("feature_selection"),
+        anomaly_config,
         memory=cache_dir,
     )
     selected_results = model_results[selected_model_name]
@@ -198,6 +202,8 @@ def main():
         build_pipeline(
             config["preprocessing"],
             {"type": "dummy", "params": {}},
+            None,
+            {"method": "none"},
             memory=cache_dir,
         ),
         X_dev,
@@ -233,6 +239,11 @@ def main():
             and feature_config.get("method", "vote") == "vote"
         ):
             search_space.update(feature_config.get("search_space", {}))
+        if anomaly_config.get("method") == "lof":
+            search_space.update(
+                anomaly_config.get("search_space", {})
+                or {"anomaly__n_neighbors": {"type": "int", "low": 20, "high": 50}}
+            )
         n_trials = tuning_config.get("n_trials_by_model", {}).get(
             selected_model_name, tuning_config["n_trials"]
         )
@@ -284,6 +295,7 @@ def main():
             config["preprocessing"],
             config["model"],
             {**feature_config, "enabled": False},
+            {"method": "none"},
             memory=cache_dir,
         )
         if tuning_config.get("enabled", False):
@@ -357,6 +369,10 @@ def main():
     print(f"Final model: {config['model']['type']} refit on all {len(X_dev)} development rows.")
     print(f"Locked test set reserved: {len(X_test)} rows.")
     features_kept = final_model.named_steps["prep"].get_feature_names_out()
+    if "anomaly" in final_model.named_steps:
+        features_kept = final_model.named_steps["anomaly"].get_feature_names_out(
+            features_kept
+        )
     if "select" in final_model.named_steps:
         features_kept = features_kept[
             final_model.named_steps["select"].get_support()
@@ -373,6 +389,7 @@ def main():
     if new_data_path:
         new_df = load_data(new_data_path)
         new_df_clean = clean_dataset(new_df, config["diagnostics"])
+        new_df_clean = add_engineered_features(new_df_clean)
         new_id = new_df_clean[config["diagnostics"].get("id_column", "id")].copy() if config["diagnostics"].get("id_column", "id") in new_df_clean.columns else pd.Series(range(len(new_df_clean)))
         new_X, _, _ = split_features_target(
             new_df_clean,
@@ -405,6 +422,7 @@ def main():
         "encoder": config["preprocessing"]["encoder"],
         "scaler": config["preprocessing"]["scaler"],
         "imputer": config["preprocessing"].get("imputation", {}).get("numeric_strategy", "median"),
+        "anomaly": anomaly_config.get("method", "none"),
         "feature_selection": str(
             feature_config if feature_config.get("enabled", False)
             else {"enabled": False}
@@ -429,9 +447,11 @@ def main():
     ]
     if "imputer" not in same_runs.columns:
         same_runs = same_runs.assign(imputer="median")
+    if "anomaly" not in same_runs.columns:
+        same_runs = same_runs.assign(anomaly="none")
     board = (
         same_runs.sort_values("mean", ascending=False)[
-            ["run", "model", "tuned", "encoder", "scaler", "imputer", "mean", "std", "untuned", "floor"]
+            ["run", "model", "tuned", "encoder", "scaler", "imputer", "anomaly", "mean", "std", "untuned", "floor"]
         ]
         .rename(columns={"mean": selection_metric})
         .to_string(index=False, float_format=lambda value: f"{value:.3f}")

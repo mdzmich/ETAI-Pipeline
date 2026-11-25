@@ -16,7 +16,7 @@ from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
 from src.feature_selection import VoteSelector
-from src.preprocessing import build_preprocessor
+from src.preprocessing import AnomalyScore, build_preprocessor
 
 
 def oblique_random_forest(
@@ -86,10 +86,20 @@ def build_pipeline(
     preprocessing_config: dict,
     model_config: dict,
     feature_selection_config: dict | None = None,
+    anomaly_config: dict | None = None,
     memory=None,
 ) -> Pipeline:
     """Combine preprocessing and model so every learned step is fitted within each fold."""
     steps = [("prep", build_preprocessor(preprocessing_config))]
+    if anomaly_config and anomaly_config.get("method", "none") != "none":
+        steps.append((
+            "anomaly",
+            AnomalyScore(
+                method=anomaly_config["method"],
+                n_neighbors=anomaly_config.get("n_neighbors", 20),
+                random_state=anomaly_config.get("random_state"),
+            ),
+        ))
     if feature_selection_config and feature_selection_config.get("enabled", False):
         method = feature_selection_config.get("method", "vote")
         if method == "vote":

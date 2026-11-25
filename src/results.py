@@ -45,11 +45,14 @@ def save_run(
     feature_selection_config = config.get("feature_selection", {})
     preprocessing_config = config.get("preprocessing", {})
     imputation_config = preprocessing_config.get("imputation", {})
+    anomaly_config = config.get("anomaly", {"method": "none"})
 
     header = (
         f"Run: {timestamp}\n"
         f"Model: {config['model']['type']}  params={config['model'].get('params', {})}\n"
         f"Feature selection: {feature_selection_config if feature_selection_config.get('enabled', False) else {'enabled': False}}\n"
+        f"Anomaly method: {anomaly_config.get('method', 'none')}  "
+        f"anomaly_settings={anomaly_config}\n"
         f"Numeric imputer: {imputation_config.get('numeric_strategy', 'median')}  "
         f"imputation_settings={imputation_config}\n"
         f"Locked test size: {config['test_set']['size']}  "
